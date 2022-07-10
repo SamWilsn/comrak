@@ -1517,6 +1517,7 @@ impl<'a, 'o, 'c> Parser<'a, 'o, 'c> {
         let mut subj = inlines::Subject::new(
             self.arena,
             self.options,
+            node_data.start_line,
             content,
             &mut self.refmap,
             &delimiter_arena,
@@ -1670,7 +1671,7 @@ impl<'a, 'o, 'c> Parser<'a, 'o, 'c> {
         }
 
         if self.options.extension.autolink {
-            autolink::process_autolinks(self.arena, node, text);
+            autolink::process_autolinks(self.arena, self.line_number, node, text);
         }
     }
 
@@ -1705,6 +1706,7 @@ impl<'a, 'o, 'c> Parser<'a, 'o, 'c> {
         *text = text[end..].to_vec();
         let checkbox = inlines::make_inline(
             self.arena,
+            self.line_number,
             NodeValue::TaskItem {
                 checked: symbol != b' ',
                 symbol: symbol,
@@ -1720,6 +1722,7 @@ impl<'a, 'o, 'c> Parser<'a, 'o, 'c> {
         let mut subj = inlines::Subject::new(
             self.arena,
             self.options,
+            self.line_number,
             content,
             &mut self.refmap,
             &delimiter_arena,
@@ -1962,5 +1965,92 @@ pub enum ListStyleType {
 impl Default for ListStyleType {
     fn default() -> Self {
         ListStyleType::Dash
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inlines_span_multiple_lines() {
+        let arena = Arena::new();
+        let input = "hello\nhi\nbanana\n\norange";
+
+        let lines: Vec<_> = parse_document(&arena, input, &Default::default())
+            .descendants()
+            .filter(|n| matches!(n.data.borrow().value, NodeValue::Text(_)))
+            .map(|n| n.data.borrow().start_line)
+            .collect();
+
+        assert_eq!(lines, [1, 2, 3, 5]);
+    }
+
+    #[test]
+    fn inlines_start_line_blank_first() {
+        let arena = Arena::new();
+        let input = "\nhello";
+
+        let lines: Vec<_> = parse_document(&arena, input, &Default::default())
+            .descendants()
+            .filter(|n| matches!(n.data.borrow().value, NodeValue::Text(_)))
+            .map(|n| n.data.borrow().start_line)
+            .collect();
+
+        assert_eq!(lines, [2]);
+    }
+
+    #[test]
+    #[ignore]
+    fn inlines_inside_table() {
+        let arena = Arena::new();
+        let input = r#"| This | is | a | header |
+| ---- | -- | - | ------ |
+| row  | 1  | b | c      |
+"#;
+
+        let config = ComrakOptions {
+            extension: ComrakExtensionOptions {
+                table: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let lines = parse_document(&arena, input, &config);
+
+        let lines: Vec<_> = lines
+            .descendants()
+            .filter(|n| matches!(n.data.borrow().value, NodeValue::Text(_)))
+            .map(|n| n.data.borrow().start_line)
+            .collect();
+
+        assert_eq!(lines, [1, 1, 1, 1, 3, 3, 3, 3]);
+    }
+
+    #[test]
+    fn inlines_inside_link() {
+        let arena = Arena::new();
+        let input = r#"a
+[b
+c](invalid) d
+e
+"#;
+
+        let config = ComrakOptions {
+            extension: ComrakExtensionOptions {
+                table: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let lines = parse_document(&arena, input, &config);
+
+        let lines: Vec<_> = lines
+            .descendants()
+            .filter(|n| matches!(n.data.borrow().value, NodeValue::Text(_)))
+            .map(|n| n.data.borrow().start_line)
+            .collect();
+
+        assert_eq!(lines, [1, 2, 3, 3, 4]);
     }
 }

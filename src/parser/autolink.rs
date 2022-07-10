@@ -8,6 +8,7 @@ use unicode_categories::UnicodeCategories;
 
 pub fn process_autolinks<'a>(
     arena: &'a Arena<AstNode<'a>>,
+    line: u32,
     node: &'a AstNode<'a>,
     contents: &mut Vec<u8>,
 ) {
@@ -20,19 +21,19 @@ pub fn process_autolinks<'a>(
         while i < len {
             match contents[i] {
                 b':' => {
-                    post_org = url_match(arena, contents, i);
+                    post_org = url_match(arena, line, contents, i);
                     if post_org.is_some() {
                         break;
                     }
                 }
                 b'w' => {
-                    post_org = www_match(arena, contents, i);
+                    post_org = www_match(arena, line, contents, i);
                     if post_org.is_some() {
                         break;
                     }
                 }
                 b'@' => {
-                    post_org = email_match(arena, contents, i);
+                    post_org = email_match(arena, line, contents, i);
                     if post_org.is_some() {
                         break;
                     }
@@ -48,7 +49,7 @@ pub fn process_autolinks<'a>(
             if i + skip < len {
                 let remain = contents[i + skip..].to_vec();
                 assert!(!remain.is_empty());
-                post.insert_after(make_inline(arena, NodeValue::Text(remain)));
+                post.insert_after(make_inline(arena, line, NodeValue::Text(remain)));
             }
             contents.truncate(i);
             return;
@@ -58,6 +59,7 @@ pub fn process_autolinks<'a>(
 
 fn www_match<'a>(
     arena: &'a Arena<AstNode<'a>>,
+    line: u32,
     contents: &[u8],
     i: usize,
 ) -> Option<(&'a AstNode<'a>, usize, usize)> {
@@ -91,10 +93,15 @@ fn www_match<'a>(
     let mut url = b"http://".to_vec();
     url.extend_from_slice(&contents[i..link_end + i]);
 
-    let inl = make_inline(arena, NodeValue::Link(NodeLink { url, title: vec![] }));
+    let inl = make_inline(
+        arena,
+        line,
+        NodeValue::Link(NodeLink { url, title: vec![] }),
+    );
 
     inl.append(make_inline(
         arena,
+        line,
         NodeValue::Text(contents[i..link_end + i].to_vec()),
     ));
     Some((inl, 0, link_end))
@@ -194,6 +201,7 @@ fn autolink_delim(data: &[u8], mut link_end: usize) -> usize {
 
 fn url_match<'a>(
     arena: &'a Arena<AstNode<'a>>,
+    line: u32,
     contents: &[u8],
     i: usize,
 ) -> Option<(&'a AstNode<'a>, usize, usize)> {
@@ -229,18 +237,20 @@ fn url_match<'a>(
     let url = contents[i - rewind..i + link_end].to_vec();
     let inl = make_inline(
         arena,
+        line,
         NodeValue::Link(NodeLink {
             url: url.clone(),
             title: vec![],
         }),
     );
 
-    inl.append(make_inline(arena, NodeValue::Text(url)));
+    inl.append(make_inline(arena, line, NodeValue::Text(url)));
     Some((inl, rewind, rewind + link_end))
 }
 
 fn email_match<'a>(
     arena: &'a Arena<AstNode<'a>>,
+    line: u32,
     contents: &[u8],
     i: usize,
 ) -> Option<(&'a AstNode<'a>, usize, usize)> {
@@ -309,10 +319,15 @@ fn email_match<'a>(
     let mut url = b"mailto:".to_vec();
     url.extend_from_slice(&contents[i - rewind..link_end + i]);
 
-    let inl = make_inline(arena, NodeValue::Link(NodeLink { url, title: vec![] }));
+    let inl = make_inline(
+        arena,
+        line,
+        NodeValue::Link(NodeLink { url, title: vec![] }),
+    );
 
     inl.append(make_inline(
         arena,
+        line,
         NodeValue::Text(contents[i - rewind..link_end + i].to_vec()),
     ));
     Some((inl, rewind, rewind + link_end))
