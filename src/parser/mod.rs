@@ -1620,14 +1620,17 @@ impl<'a, 'o, 'c> Parser<'a, 'o, 'c> {
             while let Some(n) = nch {
                 let mut this_bracket = false;
                 loop {
-                    match n.data.borrow_mut().value {
+                    let mut borrowed = n.data.borrow_mut();
+                    let line_number = borrowed.start_line; // TODO: account for newlines in text.
+
+                    match borrowed.value {
                         // Join adjacent text nodes together
                         NodeValue::Text(ref mut root) => {
                             let ns = match n.next_sibling() {
                                 Some(ns) => ns,
                                 _ => {
                                     // Post-process once we are finished joining text nodes
-                                    self.postprocess_text_node(n, root);
+                                    self.postprocess_text_node(n, line_number, root);
                                     break;
                                 }
                             };
@@ -1639,7 +1642,7 @@ impl<'a, 'o, 'c> Parser<'a, 'o, 'c> {
                                 }
                                 _ => {
                                     // Post-process once we are finished joining text nodes
-                                    self.postprocess_text_node(n, root);
+                                    self.postprocess_text_node(n, line_number, root);
                                     break;
                                 }
                             }
@@ -1665,13 +1668,18 @@ impl<'a, 'o, 'c> Parser<'a, 'o, 'c> {
         }
     }
 
-    fn postprocess_text_node(&mut self, node: &'a AstNode<'a>, text: &mut Vec<u8>) {
+    fn postprocess_text_node(
+        &mut self,
+        node: &'a AstNode<'a>,
+        line_number: u32,
+        text: &mut Vec<u8>,
+    ) {
         if self.options.extension.tasklist {
             self.process_tasklist(node, text);
         }
 
         if self.options.extension.autolink {
-            autolink::process_autolinks(self.arena, self.line_number, node, text);
+            autolink::process_autolinks(self.arena, line_number, node, text);
         }
     }
 
