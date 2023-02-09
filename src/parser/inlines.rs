@@ -882,13 +882,13 @@ impl<'a, 'r, 'o, 'd, 'i, 'c, 'subj> Subject<'a, 'r, 'o, 'd, 'i, 'c, 'subj> {
             let shortcode = &self.input[s..e];
 
             if NodeShortCode::is_valid(shortcode.to_vec()) {
-                let inl = make_emoji(self.arena, &shortcode);
+                let inl = make_emoji(self.arena, self.line, &shortcode);
                 self.pos += matchlen;
                 return inl;
             }
         }
         self.pos += 1;
-        make_inline(self.arena, NodeValue::Text(b":".to_vec()))
+        make_inline(self.arena, self.line, NodeValue::Text(b":".to_vec()))
     }
 
     pub fn handle_pointy_brace(&mut self) -> &'a AstNode<'a> {
@@ -1248,9 +1248,10 @@ fn make_autolink<'a>(
 }
 
 #[cfg(feature = "shortcodes")]
-fn make_emoji<'a>(arena: &'a Arena<AstNode<'a>>, shortcode: &[u8]) -> &'a AstNode<'a> {
+fn make_emoji<'a>(arena: &'a Arena<AstNode<'a>>, line: u32, shortcode: &[u8]) -> &'a AstNode<'a> {
     let inl = make_inline(
         arena,
+        line,
         NodeValue::ShortCode(NodeShortCode::from(shortcode.to_vec())),
     );
     inl
